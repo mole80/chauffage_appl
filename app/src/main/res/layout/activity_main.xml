@@ -7,10 +7,31 @@
     tools:context=".MainActivity">
 
     <LinearLayout
+        android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
+        <ListView
+            tools:listitem="@layout/item_sensor"
+            tools:visibility="gone"
+            android:id="@+id/lv_sensors"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+        </ListView>
+
+        <ListView
+            tools:listitem="@layout/item_room"
+            tools:visibility="visible"
+            android:visibility="visible"
+            android:layout_marginTop="20dp"
+            android:id="@+id/lv_rooms"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+        </ListView>
+
         <Button
+            android:layout_marginTop="10dp"
+            android:layout_gravity="center_horizontal"
             android:id="@+id/btn_read"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
