@@ -33,12 +33,14 @@ class Room(val id : Int, val name : String){
     var temp_start : Float = 0.0f
     var temp_stop : Float = 0.0f
     var cpt : Int = 0
+    var timeout : Int = 0
     var valveIsOpen : String = ""
 }
 
 class Sensor(val id : Int, val name : String){
     var temp : Float = 0.0f
     var hum : Float = 0.0f
+    var cpt : Int = 0
 }
 
 class SensorAdapter(private val context: Context,
@@ -115,6 +117,58 @@ class RoomAdapter(private val context: Context,
 
 class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
 
+    val test = "\n" +
+            "<h2>Maulaz's Home</h2>\n" +
+            "<h4>\n" +
+            "\n" +
+            "Capt,0,0,0,0\n" +
+            "</br>\n" +
+            "\n" +
+            "Capt,1,20.80,47.40,10344\n" +
+            "</br>\n" +
+            "\n" +
+            "Capt,2,19.50,64.40,10350\n" +
+            "</br>\n" +
+            "\n" +
+            "Capt,3,0,0,0\n" +
+            "</br>\n" +
+            "\n" +
+            "Capt,4,19.40,59.60,10351\n" +
+            "</br>\n" +
+            "\n" +
+            "Capt,5,19.50,57.10,10349\n" +
+            "</br>\n" +
+            "\n" +
+            "Capt,6,0,0,0\n" +
+            "</br>\n" +
+            "\n" +
+            "Capt,7,0,0,0\n" +
+            "</br>\n" +
+            "\n" +
+            "Capt,8,0,0,0\n" +
+            "</br>\n" +
+            "\n" +
+            "Capt,9,0,0,0\n" +
+            "</br>\n" +
+            "\n" +
+            "Valve,0,17.80,20.80,20.49,20.62,C,7,0\n" +
+            "</br>\n" +
+            "\n" +
+            "Valve,1,17.90,19.50,20.49,22.93,C,1,0\n" +
+            "</br>\n" +
+            "\n" +
+            "Valve,2,21.20,0.00,20.49,64.10,O,12465,1065\n" +
+            "</br>\n" +
+            "\n" +
+            "Valve,3,18.10,19.40,20.49,64.10,C,0,0\n" +
+            "</br>\n" +
+            "\n" +
+            "Valve,4,20.20,19.50,20.49,64.10,O,2,0\n" +
+            "</br>\n" +
+            "\n" +
+            "\n" +
+            "<h4/>\n"
+
     var rooms = ArrayList<Room>()
     var sensors = ArrayList<Sensor>()
 
@@ -127,6 +181,9 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
     var s2 = Sensor(2, "Garçon")
     var s4 = Sensor(4, "Parent lit")
     var s5 = Sensor(5, "Parent bureau")
+
+    lateinit var room_adapter : RoomAdapter
+    lateinit var sensor_adapter : SensorAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -142,14 +199,15 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
         sensors.add(s4)
         sensors.add(s5)
 
-        val room_adapter = RoomAdapter(this, rooms)
+        room_adapter = RoomAdapter(this, rooms)
         lv_rooms.adapter = room_adapter
 
-        val sensor_adapter = SensorAdapter(this, sensors)
+        sensor_adapter = SensorAdapter(this, sensors)
         lv_sensors.adapter = sensor_adapter
 
         btn_read.setOnClickListener {
-            startRead()
+            onPostExecute(test)
+            //startRead()
         }
 
         if( this.checkSelfPermission(Manifest.permission.INTERNET) == PackageManager.PERMISSION_DENIED ) {
@@ -157,8 +215,66 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
         }
     }
 
+    // "Valve , 1 , 17.90 , 19.50 , 20.49 , 22.93 , C , 1 , 0 \n"
+    fun SetRoom(value:String){
+        try {
+            val v_str = value.split(',')
+            val id = v_str[1].toInt()
+            for (r in rooms) {
+                if (r.id == id) {
+                    r.target = v_str[2].toFloat()
+                    r.meas = v_str[3].toFloat()
+                    r.temp_start = v_str[4].toFloat()
+                    r.temp_stop = v_str[5].toFloat()
+                    r.valveIsOpen = v_str[6]
+                    r.timeout = v_str[7].toInt()
+                    r.cpt = v_str[8].toInt()
+                }
+            }
+        }
+        catch (e:Exception)
+        {}
+    }
+
+    // "Capt , 2 , 19.50 , 64.40 , 10350\n"
+    fun SetSensor(value:String){
+        try {
+            val capt_str = value.split(',')
+            val id = capt_str[1].toInt()
+            for (s in sensors) {
+                if (s.id == id) {
+                    s.temp = capt_str[2].toFloat()
+                    s.hum = capt_str[3].toFloat()
+                    s.cpt = capt_str[4].toInt()
+                }
+            }
+        }
+        catch (e:Exception)
+        {}
+    }
+
+
     fun startRead(){
         AsyncRequest(this)?.execute()
+    }
+
+    fun ReadResponse(result : String?){
+        try {
+            var txt = result?.split('\n')
+
+            if(txt!!.count() < 30){
+                txt = result?.split('\r')
+            }
+
+            txt?.forEach {
+                if (it.contains("Capt")) {
+                    SetSensor(it)
+                } else if (it.contains("Valve")) {
+                    SetRoom(it)
+                }
+            }
+        }
+        catch (e:Exception){}
     }
 
     override fun doInBackground() {
@@ -166,7 +282,9 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
     }
 
     override fun onPostExecute(result: String?) {
-
+        ReadResponse(result)
+        sensor_adapter.notifyDataSetChanged()
+        room_adapter.notifyDataSetChanged()
     }
 
     override fun onPreExecute() {
@@ -191,12 +309,13 @@ class AsyncRequest(cb : Listeners) : AsyncTask<Void, Void, String>(){
     override fun doInBackground(vararg params: Void?): String {
         callback?.get()?.doInBackground()
 
-        //val u = URL("http://10.128.0.200/")
+        //val u = URL("http://www.google.ch/")
+        val u = URL("http://10.128.0.200/")
         var res : String = ""
 
-        val u = URL("http://www.google.ch/")
+        res = u.readText()
 
-        val urlConnection = u.openConnection() as HttpURLConnection
+        /*val urlConnection = u.openConnection() as HttpURLConnection
 
         try {
             urlConnection.connect()
@@ -210,7 +329,7 @@ class AsyncRequest(cb : Listeners) : AsyncTask<Void, Void, String>(){
             val sReader = InputStreamReader(st, "UTF-8")
             val buffReader = BufferedReader(sReader)
             val strBuff = StringBuffer()
-            var line : String
+            var line : String?
 
             do {
                 line = buffReader.readLine()
@@ -224,7 +343,7 @@ class AsyncRequest(cb : Listeners) : AsyncTask<Void, Void, String>(){
         }
         finally {
             urlConnection.disconnect()
-        }
+        }*/
 
         return res
    }
