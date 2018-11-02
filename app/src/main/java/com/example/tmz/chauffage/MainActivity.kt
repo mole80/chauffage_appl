@@ -1,9 +1,14 @@
 package com.example.tmz.chauffage
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.AsyncTask
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.support.v4.app.ActivityCompat
 import android.text.Layout
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,8 +17,15 @@ import android.widget.ArrayAdapter
 import android.widget.BaseAdapter
 import android.widget.TextView
 import kotlinx.android.synthetic.main.activity_main.*
+import java.io.BufferedInputStream
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.lang.ref.WeakReference
+import java.net.HttpURLConnection
 import java.net.URL
+import java.util.*
 import java.util.zip.Inflater
+import kotlin.math.log
 
 class Room(val id : Int, val name : String){
     var target : Float = 0.0f
@@ -101,7 +113,7 @@ class RoomAdapter(private val context: Context,
     }
 }
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
 
     var rooms = ArrayList<Room>()
     var sensors = ArrayList<Sensor>()
@@ -137,23 +149,93 @@ class MainActivity : AppCompatActivity() {
         lv_sensors.adapter = sensor_adapter
 
         btn_read.setOnClickListener {
-            readMeasure()
+            startRead()
+        }
+
+        if( this.checkSelfPermission(Manifest.permission.INTERNET) == PackageManager.PERMISSION_DENIED ) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 123)
         }
     }
 
-    fun readMeasure() {
-        val res = URL("http://192.168.43.20").readText()
-        var txt = res.split('\r')
-        txt.forEach {
-            if( it.contains("Capt") ){
-                val capt_str = it.split(',')
-                val id = capt_str[1].toInt()
-            }
-            else if( it.contains("Valve")){
-                val v_str = it.split(',')
-
-            }
-        }
+    fun startRead(){
+        AsyncRequest(this)?.execute()
     }
 
+    override fun doInBackground() {
+
+    }
+
+    override fun onPostExecute(result: String?) {
+
+    }
+
+    override fun onPreExecute() {
+
+    }
+}
+
+class AsyncRequest(cb : Listeners) : AsyncTask<Void, Void, String>(){
+
+    var callback : WeakReference<Listeners>? = null
+
+    init{
+        callback = WeakReference(cb)
+    }
+
+    interface Listeners {
+        fun onPreExecute()
+        fun doInBackground()
+        fun onPostExecute(result: String?)
+    }
+
+    override fun doInBackground(vararg params: Void?): String {
+        callback?.get()?.doInBackground()
+
+        //val u = URL("http://10.128.0.200/")
+        var res : String = ""
+
+        val u = URL("http://www.google.ch/")
+
+        val urlConnection = u.openConnection() as HttpURLConnection
+
+        try {
+            urlConnection.connect()
+            val repCode = urlConnection.responseCode
+            if( repCode != 200 ){
+                return ""
+            }
+
+            val st = BufferedInputStream( urlConnection.inputStream )
+
+            val sReader = InputStreamReader(st, "UTF-8")
+            val buffReader = BufferedReader(sReader)
+            val strBuff = StringBuffer()
+            var line : String
+
+            do {
+                line = buffReader.readLine()
+                strBuff.append(line + "\n")
+            }while( line != null )
+
+            res = strBuff.toString()
+
+        }catch (e : Exception){
+            Log.e("Exc", e.toString())
+        }
+        finally {
+            urlConnection.disconnect()
+        }
+
+        return res
+   }
+
+    override fun onPostExecute(result: String?) {
+        super.onPostExecute(result)
+        callback?.get()?.onPostExecute(result)
+    }
+
+    override fun onPreExecute() {
+        super.onPreExecute()
+        callback?.get()?.onPreExecute()
+    }
 }
