@@ -6,6 +6,13 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fillViewport="true"
+        android:scrollbars="vertical">
+
+
     <LinearLayout
         android:orientation="vertical"
         android:layout_width="match_parent"
@@ -16,7 +23,7 @@
             tools:visibility="gone"
             android:id="@+id/lv_sensors"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="270dp">
         </ListView>
 
         <ListView
@@ -26,7 +33,7 @@
             android:layout_marginTop="20dp"
             android:id="@+id/lv_rooms"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="350dp">
         </ListView>
 
         <Button
@@ -38,5 +45,7 @@
             android:text="Read"/>
 
     </LinearLayout>
+
+    </ScrollView>
 
 </android.support.constraint.ConstraintLayout>

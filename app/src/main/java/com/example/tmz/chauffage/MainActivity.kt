@@ -3,6 +3,7 @@ package com.example.tmz.chauffage
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.AsyncTask
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
@@ -66,10 +67,14 @@ private val dataSource : ArrayList<Sensor>) : BaseAdapter() {
         val tv_name = view.findViewById(R.id.tv_name) as TextView
         val tv_temp = view.findViewById(R.id.tv_temp) as TextView
         val tv_hum = view.findViewById(R.id.tv_hum) as TextView
+        val tv_id = view.findViewById(R.id.tv_id) as TextView
+        val tv_cpt = view.findViewById(R.id.tv_cpt) as TextView
 
         tv_name.text = (getItem(position) as Sensor).name
         tv_temp.text = (getItem(position) as Sensor).temp.toString() + " °C"
         tv_hum.text = (getItem(position) as Sensor).hum.toString() + " %"
+        tv_id.text = (getItem(position) as Sensor).id.toString()
+        tv_cpt.text = (getItem(position) as Sensor).cpt.toString()
 
         return view
     }
@@ -93,6 +98,21 @@ class RoomAdapter(private val context: Context,
         return position.toLong()
     }
 
+    fun setTextViewTemp(tv : TextView, meas : Float, cons : Float){
+        tv.text = "Meas : $meas °C"
+
+        try {
+            if (meas > cons) {
+                tv.setTextColor(Color.BLUE)
+            }
+            else{
+                tv.setTextColor(Color.RED)
+            }
+        }
+        catch (e:Exception){
+        }
+    }
+
     override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
         val view = inflater.inflate(R.layout.item_room, parent, false)
         val tv_name = view.findViewById(R.id.tv_name) as TextView
@@ -102,14 +122,29 @@ class RoomAdapter(private val context: Context,
         val tv_temp_end = view.findViewById(R.id.tv_temp_end) as TextView
         val tv_cpt = view.findViewById(R.id.tv_cpt) as TextView
         val tv_valve_open = view.findViewById(R.id.tv_valve_open) as TextView
+        val tv_cons = view.findViewById(R.id.tv_cons) as TextView
+        val tv_timeout = view.findViewById(R.id.tv_timeout) as TextView
 
-        tv_name.text = (getItem(position) as Room).name
-        tv_temp.text = (getItem(position) as Room).meas.toString() + " °C"
+        val r = getItem(position) as Room
+
+        tv_name.text = r.name
+
+        setTextViewTemp(tv_temp, r.meas, r.target )
+
         //tv_hum.text = (getItem(position) as Room).
-        tv_temp_start.text = (getItem(position) as Room).temp_start.toString()
-        tv_temp_end.text = (getItem(position) as Room).temp_stop.toString()
-        tv_cpt.text = (getItem(position) as Room).cpt.toString()
-        tv_valve_open.text = (getItem(position) as Room).valveIsOpen
+        tv_temp_start.text = "Départ ${r.temp_start} °C"
+        tv_temp_end.text = "Retour ${r.temp_stop} °C"
+        tv_cpt.text = "Cpt : ${r.cpt}"
+        tv_valve_open.text = r.valveIsOpen
+        tv_cons.text = "Cons : " + r.target + " °C"
+
+        tv_timeout.text = "Timeout : ${r.timeout}"
+        if(r.timeout > 300){
+            tv_timeout.setTextColor(Color.RED)
+        }
+        else{
+            tv_timeout.setTextColor(Color.DKGRAY)
+        }
 
         return view
     }
@@ -174,13 +209,27 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
 
     var r0 = Room(0,"Justine")
     var r1 = Room(1,"Garçon")
-    var r2 = Room(3,"Parent lit")
-    var r3 = Room(4,"Parent bureau")
+    var r3 = Room(3,"Parent lit")
+    var r4 = Room(4,"Parent bureau")
+
+    var r10 = Room(10,"Salon TV")
+    var r11 = Room(11,"Salon")
+    var r13 = Room(13,"Cuisine")
+    var r14 = Room(14,"Hall")
 
     var s1 = Sensor(1, "Justine")
     var s2 = Sensor(2, "Garçon")
     var s4 = Sensor(4, "Parent lit")
     var s5 = Sensor(5, "Parent bureau")
+    var s6 = Sensor(6, "Placard amis")
+
+    var s11 = Sensor(11, "Salon")
+    var s12 = Sensor(12, "Cuisine")
+    var s13 = Sensor(13, "Corridor")
+    var s14 = Sensor(14, "Cave")
+    var s15 = Sensor(15, "Terasse")
+
+    var floor : Int = 1
 
     lateinit var room_adapter : RoomAdapter
     lateinit var sensor_adapter : SensorAdapter
@@ -191,13 +240,25 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
 
         rooms.add(r0)
         rooms.add(r1)
-        rooms.add(r2)
         rooms.add(r3)
+        rooms.add(r4)
+
+        rooms.add(r10)
+        rooms.add(r11)
+        rooms.add(r13)
+        rooms.add(r14)
 
         sensors.add(s1)
         sensors.add(s2)
         sensors.add(s4)
         sensors.add(s5)
+        sensors.add(s6)
+
+        sensors.add(s11)
+        sensors.add(s12)
+        sensors.add(s13)
+        sensors.add(s14)
+        sensors.add(s15)
 
         room_adapter = RoomAdapter(this, rooms)
         lv_rooms.adapter = room_adapter
@@ -206,8 +267,9 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
         lv_sensors.adapter = sensor_adapter
 
         btn_read.setOnClickListener {
-            onPostExecute(test)
-            //startRead()
+            //onPostExecute(test)
+            floor = -1
+            startRead()
         }
 
         if( this.checkSelfPermission(Manifest.permission.INTERNET) == PackageManager.PERMISSION_DENIED ) {
@@ -219,7 +281,15 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
     fun SetRoom(value:String){
         try {
             val v_str = value.split(',')
-            val id = v_str[1].toInt()
+            var id = v_str[1].toInt()
+
+            if(floor == -1){
+                id += 20
+            }
+            else if(floor == 0){
+                id += 10
+            }
+
             for (r in rooms) {
                 if (r.id == id) {
                     r.target = v_str[2].toFloat()
@@ -245,7 +315,7 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
                 if (s.id == id) {
                     s.temp = capt_str[2].toFloat()
                     s.hum = capt_str[3].toFloat()
-                    s.cpt = capt_str[4].toInt()
+                    s.cpt = capt_str[4].split('\r')[0].toInt()
                 }
             }
         }
@@ -282,13 +352,39 @@ class MainActivity : AppCompatActivity(), AsyncRequest.Listeners {
     }
 
     override fun onPostExecute(result: String?) {
-        ReadResponse(result)
-        sensor_adapter.notifyDataSetChanged()
-        room_adapter.notifyDataSetChanged()
+        var res = result
+        try {
+            if( res != "" ) {
+                ReadResponse(result)
+                sensor_adapter.notifyDataSetChanged()
+                room_adapter.notifyDataSetChanged()
+            }
+        }
+        catch (e:Exception){
+            res = ""
+        }
+        finally {
+            if(res == ""){
+                btn_read.text = "Read " + floor.toString() + " : Error"
+            }
+            else{
+                btn_read.text = "Read " + floor.toString() + ": Ok"
+            }
+
+            Thread.sleep(300)
+
+            if(floor < 1){
+                floor++
+                startRead()
+            }
+            else{
+                floor = -1
+            }
+        }
     }
 
-    override fun onPreExecute() {
-
+    override fun onPreExecute() :Int {
+        return floor
     }
 }
 
@@ -296,12 +392,14 @@ class AsyncRequest(cb : Listeners) : AsyncTask<Void, Void, String>(){
 
     var callback : WeakReference<Listeners>? = null
 
+    var floor : Int? = 1
+
     init{
         callback = WeakReference(cb)
     }
 
     interface Listeners {
-        fun onPreExecute()
+        fun onPreExecute() : Int
         fun doInBackground()
         fun onPostExecute(result: String?)
     }
@@ -309,12 +407,24 @@ class AsyncRequest(cb : Listeners) : AsyncTask<Void, Void, String>(){
     override fun doInBackground(vararg params: Void?): String {
         callback?.get()?.doInBackground()
 
+        var res: String = ""
+
         //val u = URL("http://www.google.ch/")
-        val u = URL("http://10.128.0.200/")
-        var res : String = ""
-
-        res = u.readText()
-
+        try {
+            lateinit var u : URL
+            if(floor == -1) {
+                //u = URL("http://192.168.100.62/") // Correct address
+                u = URL("http://192.168.100.60/")
+            }
+            else if(floor == 0){
+                u = URL("http://192.168.100.60/")
+            }
+            else{
+                u = URL("http://192.168.100.61/")
+            }
+            res = u.readText()
+        }
+        catch (e:Exception){}
         /*val urlConnection = u.openConnection() as HttpURLConnection
 
         try {
@@ -355,6 +465,6 @@ class AsyncRequest(cb : Listeners) : AsyncTask<Void, Void, String>(){
 
     override fun onPreExecute() {
         super.onPreExecute()
-        callback?.get()?.onPreExecute()
+        floor = callback?.get()?.onPreExecute()
     }
 }
